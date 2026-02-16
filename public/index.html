@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bakerville - Online</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Libre Baskerville', Georgia, serif; background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: #e8e0d4; min-height: 100vh; }
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #c9a45c44; border-radius: 3px; }
+
+/* ─── Lobby ─── */
+.lobby-container { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+.lobby-box { text-align: center; max-width: 500px; width: 100%; }
+.lobby-title { font-size: 48px; font-weight: 700; color: #c9a45c; letter-spacing: 4px; text-transform: uppercase; text-shadow: 0 3px 6px rgba(0,0,0,0.5); margin-bottom: 4px; }
+.lobby-subtitle { color: #a89070; font-size: 14px; letter-spacing: 1px; margin-bottom: 32px; }
+.lobby-panel { background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid rgba(201,164,92,0.2); padding: 28px; margin-bottom: 20px; }
+.lobby-label { font-size: 13px; font-weight: 700; color: #c9a45c; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+.lobby-input { width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.07); border: 1px solid rgba(201,164,92,0.3); border-radius: 8px; color: #e8e0d4; font-size: 14px; font-family: inherit; outline: none; margin-bottom: 12px; }
+.lobby-input:focus { border-color: #c9a45c; }
+.lobby-input::placeholder { color: #887766; }
+.btn { background: linear-gradient(135deg, #c9a45c, #a8863a); color: #1a1a2e; border: none; border-radius: 8px; padding: 12px 28px; font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; letter-spacing: 0.5px; transition: all 0.2s; box-shadow: 0 3px 10px rgba(201,164,92,0.3); }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 5px 15px rgba(201,164,92,0.4); }
+.btn:disabled { background: #555; color: #999; cursor: not-allowed; box-shadow: none; transform: none; }
+.btn-secondary { background: rgba(201,164,92,0.15); color: #c9a45c; border: 1px solid rgba(201,164,92,0.3); }
+.btn-small { padding: 6px 14px; font-size: 12px; border-radius: 6px; }
+.btn-green { background: linear-gradient(135deg, #4a9e4a, #3a7e3a); }
+.btn-blue { background: linear-gradient(135deg, #5b7fbf, #4a6aaa); }
+.btn-red { background: linear-gradient(135deg, #c45454, #a43a3a); }
+.btn-gray { background: linear-gradient(135deg, #666, #555); }
+.room-code { font-size: 36px; font-weight: 700; color: #c9a45c; letter-spacing: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px 20px; display: inline-block; margin: 12px 0; border: 2px dashed rgba(201,164,92,0.4); }
+.player-list { text-align: left; }
+.player-item { padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; background: rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
+.player-item .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+.dot-green { background: #4a9e4a; }
+.dot-gray { background: #666; }
+.error-msg { color: #c45454; font-size: 12px; margin-top: 8px; }
+.or-divider { color: #666; margin: 16px 0; font-size: 12px; letter-spacing: 2px; }
+
+/* ─── Game Layout ─── */
+.game-container { display: flex; flex-direction: column; height: 100vh; }
+.game-header { background: linear-gradient(90deg, #2a1810, #3d2417, #2a1810); border-bottom: 3px solid #c9a45c; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); flex-shrink: 0; }
+.game-header h1 { font-size: 22px; color: #c9a45c; letter-spacing: 3px; text-transform: uppercase; }
+.game-header .info { font-size: 12px; color: #a89070; }
+.game-main { display: flex; flex: 1; overflow: hidden; }
+.sidebar { width: 260px; min-width: 260px; background: rgba(0,0,0,0.3); border-right: 1px solid rgba(201,164,92,0.15); overflow-y: auto; padding: 10px; flex-shrink: 0; }
+.center { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.section-label { font-size: 11px; font-weight: 700; color: #c9a45c; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+
+/* ─── Cards ─── */
+.card { border-radius: 8px; padding: 8px 10px; margin-bottom: 5px; position: relative; transition: transform 0.15s; }
+.card-name { font-weight: 700; font-size: 12px; }
+.card-detail { font-size: 11px; opacity: 0.8; }
+.card-buyable { cursor: pointer; }
+.card-buyable:hover { transform: scale(1.02); }
+.strike-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(180,30,30,0.5); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+
+/* ─── Tokens ─── */
+.token { display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; color: #fff; margin-right: 3px; }
+.token-r { background: #4a9e4a; }
+.token-l { background: #5b7fbf; }
+.token-g { background: #c45454; }
+.money { background: linear-gradient(135deg, #c9a45c, #a8863a); color: #1a1a2e; border-radius: 4px; padding: 1px 7px; font-size: 12px; font-weight: 700; display: inline-block; }
+
+/* ─── Dice ─── */
+.die { width: 48px; height: 48px; background: linear-gradient(135deg, #faf3e0, #e8d5a8); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 900; color: #2a1810; box-shadow: 0 3px 10px rgba(0,0,0,0.4); border: 2px solid #c9a45c; }
+.die.rolling { animation: spin 0.3s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg) scale(1.1); } to { transform: rotate(360deg) scale(1.1); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 5px #c9a45c33; } 50% { box-shadow: 0 0 18px #c9a45c77; } }
+
+/* ─── Phase Box ─── */
+.phase-box { background: rgba(201,164,92,0.12); border: 1px solid rgba(201,164,92,0.25); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+.phase-label { font-size: 13px; font-weight: 700; color: #c9a45c; }
+.phase-sub { font-size: 11px; color: #a89070; margin-left: 8px; }
+.action-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+/* ─── Market ─── */
+.market-section { margin-bottom: 12px; }
+.market-tier-label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px; padding-bottom: 3px; }
+.market-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+/* ─── Log ─── */
+.log-box { background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px; max-height: 150px; overflow-y: auto; font-size: 11px; line-height: 1.6; border: 1px solid rgba(255,255,255,0.05); }
+
+/* ─── Your Turn Indicator ─── */
+.your-turn-banner { background: linear-gradient(90deg, rgba(201,164,92,0.2), rgba(201,164,92,0.05)); border-left: 3px solid #c9a45c; padding: 6px 12px; font-size: 12px; font-weight: 700; color: #c9a45c; margin-bottom: 8px; animation: fadeIn 0.3s; }
+.waiting-banner { background: rgba(255,255,255,0.03); border-left: 3px solid #555; padding: 6px 12px; font-size: 12px; color: #888; margin-bottom: 8px; }
+
+/* ─── Winner Modal ─── */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-box { background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #c9a45c; border-radius: 12px; padding: 32px; text-align: center; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.8); }
+
+/* Player card active glow */
+.player-active { animation: pulse 2s infinite; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .game-main { flex-direction: column; }
+  .sidebar { width: 100%; min-width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid rgba(201,164,92,0.15); }
+  .market-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════ LOBBY SCREEN ═══════ -->
+<div id="lobby-screen" class="lobby-container">
+  <div class="lobby-box">
+    <h1 class="lobby-title">Bakerville</h1>
+    <p class="lobby-subtitle">City Building Card Game — Online</p>
+
+    <div id="lobby-join-create" class="lobby-panel">
+      <div class="lobby-label">Your Name</div>
+      <input id="player-name" class="lobby-input" placeholder="Enter your name" maxlength="20">
+
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <div style="flex:1">
+          <div class="lobby-label">Create New Game</div>
+          <select id="max-players" class="lobby-input" style="margin-bottom:8px">
+            <option value="3">3 Players</option>
+            <option value="4" selected>4 Players</option>
+            <option value="5">5 Players</option>
+            <option value="6">6 Players</option>
+          </select>
+          <button id="btn-create" class="btn" style="width:100%">Create Room</button>
+        </div>
+        <div style="flex:1">
+          <div class="lobby-label">Join Existing Game</div>
+          <input id="room-code-input" class="lobby-input" placeholder="Room Code" maxlength="5" style="text-transform:uppercase">
+          <button id="btn-join" class="btn btn-secondary" style="width:100%">Join Room</button>
+        </div>
+      </div>
+      <div id="lobby-error" class="error-msg" style="display:none"></div>
+    </div>
+
+    <!-- Waiting Room -->
+    <div id="lobby-waiting" class="lobby-panel" style="display:none">
+      <div class="lobby-label">Room Code — Share This!</div>
+      <div class="room-code" id="display-room-code"></div>
+      <div style="font-size:11px; color:#888; margin-bottom:16px;">Give this code to your friends so they can join</div>
+
+      <div class="lobby-label">Players</div>
+      <div id="player-list" class="player-list"></div>
+      <div id="waiting-msg" style="color:#888; font-size:12px; margin-top:12px;"></div>
+      <button id="btn-start" class="btn" style="margin-top:16px; display:none;">Start Game</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ GAME SCREEN ═══════ -->
+<div id="game-screen" class="game-container" style="display:none">
+  <div class="game-header">
+    <div>
+      <h1>Bakerville</h1>
+      <span class="info" id="header-info"></span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span class="money" id="header-cash"></span>
+      <span class="info" id="header-turn"></span>
+    </div>
+  </div>
+
+  <div class="game-main">
+    <div class="sidebar">
+      <div class="section-label">Players</div>
+      <div id="players-panel"></div>
+      <div class="section-label" style="margin-top:10px">Game Log</div>
+      <div id="game-log" class="log-box"></div>
+    </div>
+
+    <div class="center">
+      <div id="turn-banner"></div>
+      <div id="phase-box" class="phase-box"></div>
+      <div id="my-city"></div>
+      <div id="marketplace"></div>
+    </div>
+  </div>
+
+  <!-- Winner Modal -->
+  <div id="winner-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
+      <div style="font-size:48px; margin-bottom:12px">🏆</div>
+      <h2 id="winner-name" style="color:#c9a45c; margin-bottom:8px"></h2>
+      <p id="winner-cash" style="font-size:20px"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// CLIENT
+// ═══════════════════════════════════════
+const socket = io();
+let myIndex = -1;
+let gameState = null;
+let isHost = false;
+
+// ─── DOM Refs ───
+const $ = (id) => document.getElementById(id);
+
+// ─── Lobby Logic ───
+$("btn-create").onclick = () => {
+  const name = $("player-name").value.trim();
+  if (!name) return showError("Enter your name");
+  const max = parseInt($("max-players").value);
+  socket.emit("create_room", { playerName: name, maxPlayers: max }, (res) => {
+    if (res.error) return showError(res.error);
+    myIndex = res.yourIndex;
+    isHost = true;
+    showWaiting(res.roomCode);
+  });
+};
+
+$("btn-join").onclick = () => {
+  const name = $("player-name").value.trim();
+  const code = $("room-code-input").value.trim().toUpperCase();
+  if (!name) return showError("Enter your name");
+  if (!code) return showError("Enter a room code");
+  socket.emit("join_room", { roomCode: code, playerName: name }, (res) => {
+    if (res.error) return showError(res.error);
+    myIndex = res.yourIndex;
+    if (res.reconnected) {
+      // Reconnecting to an active game
+      showGame();
+    } else {
+      showWaiting(res.roomCode);
+    }
+  });
+};
+
+$("btn-start").onclick = () => {
+  socket.emit("start_game", null, (res) => {
+    if (res.error) return showError(res.error);
+  });
+};
+
+function showError(msg) {
+  const el = $("lobby-error");
+  el.textContent = msg;
+  el.style.display = "block";
+  setTimeout(() => el.style.display = "none", 4000);
+}
+
+function showWaiting(code) {
+  $("lobby-join-create").style.display = "none";
+  $("lobby-waiting").style.display = "block";
+  $("display-room-code").textContent = code;
+}
+
+function showGame() {
+  $("lobby-screen").style.display = "none";
+  $("game-screen").style.display = "flex";
+}
+
+// ─── Socket Events ───
+socket.on("lobby_update", (data) => {
+  if (data.started && !gameState) {
+    showGame();
+    return;
+  }
+  const list = $("player-list");
+  list.innerHTML = data.players.map(p =>
+    `<div class="player-item">
+      <span><span class="dot ${p.connected ? 'dot-green' : 'dot-gray'}"></span>${p.name}${p.index === 0 ? ' (Host)' : ''}</span>
+      <span style="font-size:11px;color:#888">${p.connected ? 'Ready' : 'Disconnected'}</span>
+    </div>`
+  ).join("");
+  $("waiting-msg").textContent = `${data.players.length}/${data.maxPlayers} players joined`;
+  if (isHost && data.players.length >= 3) {
+    $("btn-start").style.display = "inline-block";
+  }
+});
+
+socket.on("game_state", (data) => {
+  gameState = data.game;
+  myIndex = data.yourIndex;
+  if (!$("game-screen").style.display || $("game-screen").style.display === "none") showGame();
+  renderGame();
+});
+
+// ─── Emit Helper ───
+function emit(event, data) {
+  socket.emit(event, data || {}, (res) => {
+    if (res && res.error) {
+      console.warn(event, res.error);
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function renderGame() {
+  const g = gameState;
+  if (!g) return;
+  const me = g.players[myIndex];
+  const cp = g.players[g.currentPlayer];
+  const isMyTurn = g.currentPlayer === myIndex;
+  const storageLimit = 10 + (me.storageBonus || 0);
+
+  // Header
+  $("header-info").textContent = `Room active • ${g.players.length} players`;
+  $("header-cash").textContent = `$${me.cash}`;
+  $("header-turn").textContent = isMyTurn ? "YOUR TURN" : `${cp.name}'s turn`;
+
+  // Turn banner
+  if (g.winner !== null) {
+    $("turn-banner").innerHTML = "";
+  } else if (isMyTurn) {
+    $("turn-banner").innerHTML = `<div class="your-turn-banner">It's your turn!</div>`;
+  } else {
+    $("turn-banner").innerHTML = `<div class="waiting-banner">Waiting for ${cp.name}...</div>`;
+  }
+
+  // Players panel
+  renderPlayers(g);
+
+  // Phase controls
+  renderPhase(g, isMyTurn);
+
+  // My city
+  renderCity(g);
+
+  // Marketplace
+  renderMarket(g, isMyTurn);
+
+  // Log
+  const logEl = $("game-log");
+  logEl.innerHTML = g.log.slice(-40).map((l, i, arr) =>
+    `<div style="opacity:${i === arr.length - 1 ? 1 : 0.7}">${l}</div>`
+  ).join("");
+  logEl.scrollTop = logEl.scrollHeight;
+
+  // Winner modal
+  if (g.winner !== null) {
+    $("winner-modal").style.display = "flex";
+    $("winner-name").textContent = `${g.players[g.winner].name} Wins!`;
+    $("winner-cash").textContent = `$${g.players[g.winner].cash}`;
+  } else {
+    $("winner-modal").style.display = "none";
+  }
+}
+
+function renderPlayers(g) {
+  $("players-panel").innerHTML = g.players.map((p, i) => {
+    const isActive = i === g.currentPlayer;
+    const borderColor = isActive ? "#c9a45c" : "#444";
+    const isSelf = i === myIndex;
+    return `<div class="card ${isActive ? 'player-active' : ''}" style="background:${borderColor}18; border:2px solid ${borderColor}; ${isSelf ? 'border-left:4px solid #c9a45c;' : ''}">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+        <span class="card-name" style="color:${isActive ? '#c9a45c' : '#ddd'}">${p.name}${isSelf ? ' (You)' : ''}</span>
+        <span class="money">$${p.cash}</span>
+      </div>
+      <div style="margin-bottom:3px">
+        <span class="token token-r">${p.resources}R</span>
+        <span class="token token-l">${p.labor}L</span>
+        <span class="token token-g">${p.goods}G</span>
+      </div>
+      <div class="card-detail">City: ${p.city.length} cards | Actions: ${p.actionCards ? p.actionCards.length : '?'}</div>
+      ${g.phase === "action" && g.currentPlayer === myIndex && i !== myIndex && g.turnSubPhase === "takeover" ?
+        renderTakeoverButtons(p, i) : ''}
+    </div>`;
+  }).join("");
+}
+
+function renderTakeoverButtons(player, pi) {
+  const cards = player.city.filter(c => c.defId !== "homestead");
+  if (cards.length === 0) return '<div class="card-detail" style="color:#888">No takeable cards</div>';
+  return cards.map(c => {
+    const realIdx = player.city.indexOf(c);
+    return `<button class="btn btn-red btn-small" style="margin:2px; font-size:10px;" onclick="emit('action_takeover', {targetPI:${pi}, cardIdx:${realIdx}})">Take ${c.name} ($${c.cost})</button>`;
+  }).join("");
+}
+
+function renderPhase(g, isMyTurn) {
+  const box = $("phase-box");
+  const cp = g.players[g.currentPlayer];
+  const me = g.players[myIndex];
+  const canRollTwo = cp.city.some(c => c.defId === "fitness");
+  const storageLimit = 10 + (me.storageBonus || 0);
+
+  const phaseLabels = {
+    production: "Phase 1: Production — Roll Dice",
+    choose_die: "Phase 1: Choose Die for Production",
+    resolve_production: "Phase 1: Resolving Production...",
+    convert: "Phase 1: Convert Resources (Tier 2)",
+    sell: "Phase 1: Sell Goods (Tier 3)",
+    action: "Phase 2: Choose an Action",
+    end_turn: "End of Turn",
+    discard_tokens: "Discard Excess Tokens",
+  };
+
+  let diceHtml = "";
+  if (g.dice[0] !== null) {
+    diceHtml = `<div class="die">${g.dice[0]}</div>`;
+    if (g.dice[1] !== null) diceHtml += `<div class="die">${g.dice[1]}</div>`;
+  }
+
+  let controlsHtml = "";
+
+  if (!isMyTurn) {
+    controlsHtml = `<div style="font-size:12px; color:#888; margin-top:8px;">Waiting for ${cp.name} to ${phaseLabels[g.phase] || g.phase}...</div>`;
+  } else {
+    switch (g.phase) {
+      case "production":
+        controlsHtml = `<div class="action-buttons">
+          <button class="btn" onclick="emit('action_roll',{useTwoDice:false})">Roll 1 Die</button>
+          ${canRollTwo ? `<button class="btn" style="background:linear-gradient(135deg,#a8863a,#8a6e2a)" onclick="emit('action_roll',{useTwoDice:true})">Roll 2 Dice (Fitness)</button>` : ''}
+        </div>`;
+        break;
+      case "choose_die":
+        controlsHtml = `<div style="font-size:12px; margin-bottom:6px;">Pick which die applies to production:</div>
+        <div class="action-buttons">
+          <button class="btn" onclick="emit('action_choose_die',{value:${g.dice[0]}})">Use ${g.dice[0]}</button>
+          <button class="btn" style="background:linear-gradient(135deg,#a8863a,#8a6e2a)" onclick="emit('action_choose_die',{value:${g.dice[1]}})">Use ${g.dice[1]}</button>
+        </div>`;
+        break;
+      case "resolve_production":
+        controlsHtml = `<button class="btn" onclick="emit('action_resolve')">Resolve Production (Roll: ${g.diceRoll})</button>`;
+        break;
+      case "convert":
+        controlsHtml = renderConvertControls(g);
+        break;
+      case "sell":
+        controlsHtml = renderSellControls(g);
+        break;
+      case "action":
+        controlsHtml = renderActionControls(g);
+        break;
+      case "end_turn":
+        controlsHtml = `<div style="font-size:12px; margin-bottom:8px;">
+          Tokens: ${me.resources}R + ${me.labor}L + ${me.goods}G = ${me.resources + me.labor + me.goods}/${storageLimit}
+        </div>
+        <button class="btn" onclick="emit('action_end_turn')">End Turn</button>`;
+        break;
+      case "discard_tokens":
+        controlsHtml = renderDiscardControls(g);
+        break;
+    }
+  }
+
+  box.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+    <div><span class="phase-label">${phaseLabels[g.phase] || g.phase}</span><span class="phase-sub">${cp.name}'s Turn</span></div>
+    <div style="display:flex; gap:6px;">${diceHtml}</div>
+  </div>${controlsHtml}`;
+}
+
+function renderConvertControls(g) {
+  const me = g.players[myIndex];
+  const cards = me.city.filter(c => g.pendingConversions.includes(c.id));
+  return `<div style="font-size:12px; margin-bottom:6px;">Your Tier 2 factories activated. Convert?</div>` +
+    cards.map(card => {
+      const cv = card.convert;
+      const canDo = me.resources >= cv.resIn && me.labor >= cv.labIn;
+      return `<div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+        <span class="card-name">${card.name}</span>
+        <span class="card-detail">(${cv.resIn}R + ${cv.labIn}L → ${cv.goodsOut}G)</span>
+        <button class="btn btn-green btn-small" ${canDo ? '' : 'disabled'} onclick="emit('action_convert',{cardId:'${card.id}',doIt:true})">Convert</button>
+        <button class="btn btn-gray btn-small" onclick="emit('action_convert',{cardId:'${card.id}',doIt:false})">Skip</button>
+      </div>`;
+    }).join("");
+}
+
+function renderSellControls(g) {
+  const me = g.players[myIndex];
+  const cards = me.city.filter(c => g.pendingSales.includes(c.id));
+  return `<div style="font-size:12px; margin-bottom:6px;">Your Retail cards activated. Sell goods?</div>` +
+    cards.map(card => {
+      const canSell = me.goods > 0;
+      return `<div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+        <span class="card-name">${card.name}</span>
+        <span class="card-detail">(up to ${card.sell.goodsIn}G → $${card.sell.cashOut} each)</span>
+        <button class="btn btn-red btn-small" ${canSell ? '' : 'disabled'} onclick="emit('action_sell',{cardId:'${card.id}',doIt:true})">Sell</button>
+        <button class="btn btn-gray btn-small" onclick="emit('action_sell',{cardId:'${card.id}',doIt:false})">Skip</button>
+      </div>`;
+    }).join("");
+}
+
+function renderActionControls(g) {
+  const me = g.players[myIndex];
+  const canTrade = me.resources >= 3 || me.labor >= 3 || me.goods >= 3;
+  let html = `<div class="action-buttons">
+    <button class="btn btn-green btn-small" onclick="setSubPhase('build')">Build</button>`;
+
+  // Trade buttons for each type
+  if (me.resources >= 3) html += `<button class="btn btn-blue btn-small" onclick="emit('action_trade_bank',{tokenType:'resources'})">Trade 3R→$10</button>`;
+  if (me.labor >= 3) html += `<button class="btn btn-blue btn-small" onclick="emit('action_trade_bank',{tokenType:'labor'})">Trade 3L→$10</button>`;
+  if (me.goods >= 3) html += `<button class="btn btn-blue btn-small" onclick="emit('action_trade_bank',{tokenType:'goods'})">Trade 3G→$10</button>`;
+
+  html += `<button class="btn btn-red btn-small" onclick="setSubPhase('takeover')">Hostile Takeover</button>
+    <button class="btn btn-gray btn-small" onclick="setSubPhase('wipe')">Wipe Market</button>
+    <button class="btn btn-small" ${me.cash < 20 ? 'disabled' : ''} onclick="emit('action_lobby_council')">Lobby Council ($20)</button>
+    <button class="btn btn-gray btn-small" onclick="emit('action_pass')">Pass</button>
+  </div>`;
+
+  if (g.turnSubPhase === "build") {
+    html += `<div style="font-size:11px; color:#c9a45c; margin-top:6px;">Click a card in the Marketplace below to build it.</div>`;
+  } else if (g.turnSubPhase === "takeover") {
+    html += `<div style="font-size:11px; color:#c45454; margin-top:6px;">Select a card from another player in the sidebar.</div>`;
+  } else if (g.turnSubPhase === "wipe") {
+    html += `<div class="action-buttons" style="margin-top:6px;">
+      <button class="btn btn-green btn-small" onclick="emit('action_wipe',{tier:1})">Wipe Tier 1</button>
+      <button class="btn btn-small" style="background:#d4a843;color:#1a1a2e" onclick="emit('action_wipe',{tier:2})">Wipe Tier 2</button>
+      <button class="btn btn-red btn-small" onclick="emit('action_wipe',{tier:3})">Wipe Tier 3</button>
+    </div>`;
+  }
+
+  // Action cards
+  if (me.actionCards && me.actionCards.length > 0 && me.actionCards[0] && !me.actionCards[0].hidden) {
+    html += `<div style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
+      <div style="font-size:11px; font-weight:700; color:#c9a45c; margin-bottom:4px;">Your Action Cards:</div>
+      <div style="display:flex; gap:4px; flex-wrap:wrap;">
+        ${me.actionCards.map((ac, i) =>
+          `<button class="btn btn-small" style="font-size:10px;" title="${ac.desc}" onclick="emit('action_play_card',{cardIdx:${i}})">${ac.name}</button>`
+        ).join("")}
+      </div>
+    </div>`;
+  }
+
+  return html;
+}
+
+function renderDiscardControls(g) {
+  const me = g.players[myIndex];
+  const storageLimit = 10 + (me.storageBonus || 0);
+  const total = me.resources + me.labor + me.goods;
+  return `<div style="font-size:12px; color:#c45454; margin-bottom:8px;">
+    You have ${total} tokens but the limit is ${storageLimit}. Discard ${g.discardNeeded} more token${g.discardNeeded !== 1 ? 's' : ''}:
+  </div>
+  <div class="action-buttons">
+    <button class="btn btn-green btn-small" ${me.resources === 0 ? 'disabled' : ''} onclick="emit('action_discard',{type:'resource'})">Discard 1 Resource (${me.resources})</button>
+    <button class="btn btn-blue btn-small" ${me.labor === 0 ? 'disabled' : ''} onclick="emit('action_discard',{type:'labor'})">Discard 1 Labor (${me.labor})</button>
+    <button class="btn btn-red btn-small" ${me.goods === 0 ? 'disabled' : ''} onclick="emit('action_discard',{type:'goods'})">Discard 1 Good (${me.goods})</button>
+  </div>
+  <div style="margin-top:6px; font-size:11px; opacity:0.7;">
+    <span class="token token-r">${me.resources}R</span>
+    <span class="token token-l">${me.labor}L</span>
+    <span class="token token-g">${me.goods}G</span>
+    = ${total}/${storageLimit}
+  </div>`;
+}
+
+function renderCity(g) {
+  const me = g.players[myIndex];
+  $("my-city").innerHTML = `
+    <div style="margin-bottom:12px;">
+      <div class="section-label" style="margin-bottom:6px;">
+        Your City (${me.city.length} cards)
+        <span style="font-weight:400; margin-left:8px;">
+          <span class="token token-r">${me.resources}R</span>
+          <span class="token token-l">${me.labor}L</span>
+          <span class="token token-g">${me.goods}G</span>
+        </span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:5px;">
+        ${me.city.map(card => `
+          <div class="card" style="background:${card.color}22; border:2px solid ${card.color}; box-shadow:0 2px 6px ${card.color}22;">
+            ${me.strikes && me.strikes[card.id] ? '<div class="strike-overlay">ON STRIKE</div>' : ''}
+            <div class="card-name">${card.name}</div>
+            <div class="card-detail">${card.tier > 0 ? `[${card.activation.join(",")}]` : "Your turn"} — ${card.desc}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
+function renderMarket(g, isMyTurn) {
+  const me = g.players[myIndex];
+  const tierColors = { 1: "#4a9e4a", 2: "#d4a843", 3: "#c45454" };
+  const tierLabels = { 1: "Supply", 2: "Industry", 3: "Retail" };
+  const hasTier = (tier) => me.city.some(c => c.tier === tier);
+
+  $("marketplace").innerHTML = `
+    <div class="section-label" style="margin-bottom:8px;">Marketplace</div>
+    ${[1, 2, 3].map(tier => {
+      const prereqMet = tier === 1 || (tier === 2 && hasTier(1)) || (tier === 3 && hasTier(2));
+      const prereqMsg = tier === 2 && !hasTier(1) ? " — Need Tier 1 first" : tier === 3 && !hasTier(2) ? " — Need Tier 2 first" : "";
+      return `<div class="market-section">
+        <div class="market-tier-label" style="color:${tierColors[tier]}; border-bottom:1px solid ${tierColors[tier]}33;">
+          ${tierLabels[tier]} (Tier ${tier})${prereqMsg ? `<span style="color:#888; font-size:10px;">${prereqMsg}</span>` : ''}
+        </div>
+        <div class="market-grid">
+          ${g.market[`tier${tier}`].map((card, idx) => {
+            if (!card) return `<div class="card" style="background:#33333344; border:1px solid #444; opacity:0.4;"><div class="card-detail">Empty</div></div>`;
+            const canBuy = isMyTurn && g.phase === "action" && g.turnSubPhase === "build" && me.cash >= card.cost && prereqMet;
+            return `<div class="card ${canBuy ? 'card-buyable' : ''}" style="background:${card.color}22; border:2px solid ${card.color}; opacity:${canBuy ? 1 : 0.7};"
+              ${canBuy ? `onclick="emit('action_build',{tier:${tier},idx:${idx}})"` : ''}>
+              <div style="display:flex; justify-content:space-between;">
+                <span class="card-name">${card.name}</span>
+                <span class="money" style="font-size:10px;">$${card.cost}</span>
+              </div>
+              <div class="card-detail">[${card.activation.join(",")}] ${card.desc}</div>
+              ${canBuy ? '<div style="font-size:10px; color:#c9a45c; font-weight:700; margin-top:2px;">Click to buy</div>' : ''}
+            </div>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }).join("")}`;
+}
+
+// ─── Sub-phase toggle (client-side only, sent to server via turnSubPhase) ───
+function setSubPhase(phase) {
+  if (!gameState) return;
+  gameState.turnSubPhase = gameState.turnSubPhase === phase ? null : phase;
+  renderGame();
+}
+</script>
+</body>
+</html>
